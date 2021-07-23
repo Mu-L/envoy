@@ -1,4 +1,4 @@
-#include "common/router/config_impl.h"
+#include "source/common/router/config_impl.h"
 
 #include <algorithm>
 #include <chrono>
@@ -18,28 +18,26 @@
 #include "envoy/upstream/cluster_manager.h"
 #include "envoy/upstream/upstream.h"
 
-#include "common/common/assert.h"
-#include "common/common/empty_string.h"
-#include "common/common/fmt.h"
-#include "common/common/hash.h"
-#include "common/common/logger.h"
-#include "common/common/regex.h"
-#include "common/common/utility.h"
-#include "common/config/metadata.h"
-#include "common/config/utility.h"
-#include "common/config/well_known_names.h"
-#include "common/http/headers.h"
-#include "common/http/path_utility.h"
-#include "common/http/utility.h"
-#include "common/protobuf/protobuf.h"
-#include "common/protobuf/utility.h"
-#include "common/router/reset_header_parser.h"
-#include "common/router/retry_state_impl.h"
-#include "common/runtime/runtime_features.h"
-#include "common/tracing/http_tracer_impl.h"
-
-#include "extensions/filters/http/common/utility.h"
-#include "extensions/filters/http/well_known_names.h"
+#include "source/common/common/assert.h"
+#include "source/common/common/empty_string.h"
+#include "source/common/common/fmt.h"
+#include "source/common/common/hash.h"
+#include "source/common/common/logger.h"
+#include "source/common/common/regex.h"
+#include "source/common/common/utility.h"
+#include "source/common/config/metadata.h"
+#include "source/common/config/utility.h"
+#include "source/common/config/well_known_names.h"
+#include "source/common/http/headers.h"
+#include "source/common/http/path_utility.h"
+#include "source/common/http/utility.h"
+#include "source/common/protobuf/protobuf.h"
+#include "source/common/protobuf/utility.h"
+#include "source/common/router/reset_header_parser.h"
+#include "source/common/router/retry_state_impl.h"
+#include "source/common/runtime/runtime_features.h"
+#include "source/common/tracing/http_tracer_impl.h"
+#include "source/extensions/filters/http/common/utility.h"
 
 #include "absl/strings/match.h"
 
@@ -752,6 +750,9 @@ absl::string_view RouteEntryImplBase::processRequestHost(const Http::RequestHead
 
   if (host_end != absl::string_view::npos) {
     absl::string_view request_port = request_host.substr(host_end);
+    // In the rare case that X-Forwarded-Proto and scheme disagree (say http URL over an HTTPS
+    // connection), do port stripping based on X-Forwarded-Proto so http://foo.com:80 won't
+    // have the port stripped when served over TLS.
     absl::string_view request_protocol = headers.getForwardedProtoValue();
     bool remove_port = !new_port.empty();
 
@@ -783,8 +784,9 @@ std::string RouteEntryImplBase::newPath(const Http::RequestHeaderMap& headers) c
   } else if (https_redirect_) {
     final_scheme = Http::Headers::get().SchemeValues.Https;
   } else {
-    ASSERT(headers.ForwardedProto());
-    final_scheme = headers.getForwardedProtoValue();
+    // Serve the redirect URL based on the scheme of the original URL, not the
+    // security of the underlying connection.
+    final_scheme = Http::Utility::getScheme(headers);
   }
 
   if (!port_redirect_.empty()) {
@@ -835,8 +837,7 @@ std::multimap<std::string, std::string>
 RouteEntryImplBase::parseOpaqueConfig(const envoy::config::route::v3::Route& route) {
   std::multimap<std::string, std::string> ret;
   if (route.has_metadata()) {
-    auto filter_metadata = route.metadata().filter_metadata().find(
-        Extensions::HttpFilters::HttpFilterNames::get().Router);
+    auto filter_metadata = route.metadata().filter_metadata().find("envoy.filters.http.router");
     if (filter_metadata == route.metadata().filter_metadata().end()) {
       // TODO(zuercher): simply return `ret` when deprecated filter names are removed.
       filter_metadata = route.metadata().filter_metadata().find(DEPRECATED_ROUTER_NAME);
@@ -845,8 +846,7 @@ RouteEntryImplBase::parseOpaqueConfig(const envoy::config::route::v3::Route& rou
       }
 
       Extensions::Common::Utility::ExtensionNameUtil::checkDeprecatedExtensionName(
-          "http filter", DEPRECATED_ROUTER_NAME,
-          Extensions::HttpFilters::HttpFilterNames::get().Router);
+          "http filter", DEPRECATED_ROUTER_NAME, "envoy.filters.http.router");
     }
     for (const auto& it : filter_metadata->second.fields()) {
       if (it.second.kind_case() == ProtobufWkt::Value::kStringValue) {
@@ -1025,7 +1025,8 @@ RouteEntryImplBase::WeightedClusterEntry::WeightedClusterEntry(
                                                        cluster.response_headers_to_remove())),
       per_filter_configs_(cluster.typed_per_filter_config(),
                           cluster.hidden_envoy_deprecated_per_filter_config(),
-                          optional_http_filters, factory_context, validator) {
+                          optional_http_filters, factory_context, validator),
+      host_rewrite_(cluster.host_rewrite_literal()) {
   if (cluster.has_metadata_match()) {
     const auto filter_it = cluster.metadata_match().filter_metadata().find(
         Envoy::Config::MetadataFilters::get().ENVOY_LB);
@@ -1370,18 +1371,21 @@ RouteConstSharedPtr VirtualHostImpl::getRouteFromEntries(const RouteCallback& cb
                                                          const Http::RequestHeaderMap& headers,
                                                          const StreamInfo::StreamInfo& stream_info,
                                                          uint64_t random_value) const {
-  // No x-forwarded-proto header. This normally only happens when ActiveStream::decodeHeaders
-  // bails early (as it rejects a request), so there is no routing is going to happen anyway.
-  const auto* forwarded_proto_header = headers.ForwardedProto();
-  if (forwarded_proto_header == nullptr) {
+  // In the rare case that X-Forwarded-Proto and scheme disagree (say http URL over an HTTPS
+  // connection), force a redirect based on underlying protocol, rather than URL
+  // scheme, so don't force a redirect for a http:// url served over a TLS
+  // connection.
+  const absl::string_view scheme = headers.getForwardedProtoValue();
+  if (scheme.empty()) {
+    // No scheme header. This normally only happens when ActiveStream::decodeHeaders
+    // bails early (as it rejects a request), or a buggy filter removes the :scheme header.
     return nullptr;
   }
 
   // First check for ssl redirect.
-  if (ssl_requirements_ == SslRequirements::All && forwarded_proto_header->value() != "https") {
+  if (ssl_requirements_ == SslRequirements::All && scheme != "https") {
     return SSL_REDIRECT_ROUTE;
-  } else if (ssl_requirements_ == SslRequirements::ExternalOnly &&
-             forwarded_proto_header->value() != "https" &&
+  } else if (ssl_requirements_ == SslRequirements::ExternalOnly && scheme != "https" &&
              !Http::HeaderUtility::isEnvoyInternalRequest(headers)) {
     return SSL_REDIRECT_ROUTE;
   }

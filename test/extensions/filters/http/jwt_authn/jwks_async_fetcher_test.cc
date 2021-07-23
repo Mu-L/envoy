@@ -1,4 +1,4 @@
-#include "extensions/filters/http/jwt_authn/jwks_async_fetcher.h"
+#include "source/extensions/filters/http/jwt_authn/jwks_async_fetcher.h"
 
 #include "test/extensions/filters/http/jwt_authn/test_common.h"
 #include "test/mocks/server/factory_context.h"
@@ -23,10 +23,7 @@ public:
   MockJwksFetcher(SaveJwksReceiverFn receiver_fn) : receiver_fn_(receiver_fn) {}
 
   void cancel() override {}
-  void fetch(const envoy::config::core::v3::HttpUri&, Tracing::Span&,
-             JwksReceiver& receiver) override {
-    receiver_fn_(receiver);
-  }
+  void fetch(Tracing::Span&, JwksReceiver& receiver) override { receiver_fn_(receiver); }
 
 private:
   SaveJwksReceiverFn receiver_fn_;
@@ -66,7 +63,7 @@ public:
 
     async_fetcher_ = std::make_unique<JwksAsyncFetcher>(
         config_, context_,
-        [this](Upstream::ClusterManager&) {
+        [this](Upstream::ClusterManager&, const RemoteJwks&) {
           return std::make_unique<MockJwksFetcher>(
               [this](Common::JwksFetcher::JwksReceiver& receiver) {
                 fetch_receiver_array_.push_back(&receiver);

@@ -4,15 +4,14 @@
 #include "envoy/http/request_id_extension.h"
 #include "envoy/type/v3/percent.pb.h"
 
-#include "common/common/random_generator.h"
-#include "common/http/conn_manager_utility.h"
-#include "common/http/header_utility.h"
-#include "common/http/headers.h"
-#include "common/network/address_impl.h"
-#include "common/network/utility.h"
-#include "common/runtime/runtime_impl.h"
-
-#include "extensions/request_id/uuid/config.h"
+#include "source/common/common/random_generator.h"
+#include "source/common/http/conn_manager_utility.h"
+#include "source/common/http/header_utility.h"
+#include "source/common/http/headers.h"
+#include "source/common/network/address_impl.h"
+#include "source/common/network/utility.h"
+#include "source/common/runtime/runtime_impl.h"
+#include "source/extensions/request_id/uuid/config.h"
 
 #include "test/common/http/custom_header_extension.h"
 #include "test/common/http/xff_extension.h"
@@ -64,6 +63,7 @@ public:
             [this](Http::RequestHeaderMap& request_headers, Tracing::Reason trace_status) {
               real_->setTraceReason(request_headers, trace_status);
             });
+    ON_CALL(*this, useRequestIdForTraceSampling()).WillByDefault(Return(true));
   }
 
   MOCK_METHOD(void, set, (Http::RequestHeaderMap&, bool));
@@ -71,6 +71,7 @@ public:
   MOCK_METHOD(absl::optional<uint64_t>, toInteger, (const Http::RequestHeaderMap&), (const));
   MOCK_METHOD(Tracing::Reason, getTraceReason, (const Http::RequestHeaderMap&));
   MOCK_METHOD(void, setTraceReason, (Http::RequestHeaderMap&, Tracing::Reason));
+  MOCK_METHOD(bool, useRequestIdForTraceSampling, (), (const));
 
 private:
   RequestIDExtensionSharedPtr real_;
@@ -333,6 +334,23 @@ TEST_F(ConnectionManagerUtilityTest, SchemeIsRespected) {
   EXPECT_EQ("https", headers.getSchemeValue());
 }
 
+TEST_F(ConnectionManagerUtilityTest, SchemeOverwrite) {
+  ON_CALL(config_, useRemoteAddress()).WillByDefault(Return(true));
+  ON_CALL(config_, xffNumTrustedHops()).WillByDefault(Return(0));
+  connection_.stream_info_.downstream_address_provider_->setRemoteAddress(
+      std::make_shared<Network::Address::Ipv4Instance>("127.0.0.1"));
+  TestRequestHeaderMapImpl headers{};
+  Network::Address::Ipv4Instance local_address("10.3.2.1");
+  ON_CALL(config_, localAddress()).WillByDefault(ReturnRef(local_address));
+
+  // Scheme was present. Do not overwrite anything
+  // Scheme and X-Forwarded-Proto will be overwritten.
+  config_.scheme_ = "https";
+  callMutateRequestHeaders(headers, Protocol::Http2);
+  EXPECT_EQ("https", headers.getSchemeValue());
+  EXPECT_EQ("https", headers.getForwardedProtoValue());
+}
+
 // Verify internal request and XFF is set when we are using remote address and the address is
 // internal according to user configuration.
 TEST_F(ConnectionManagerUtilityTest, UseRemoteAddressWhenUserConfiguredRemoteAddress) {
@@ -394,6 +412,23 @@ TEST_F(ConnectionManagerUtilityTest, UseXFFTrustedHopsWithoutRemoteAddress) {
   EXPECT_EQ((MutateRequestRet{"198.51.100.2:0", false, Tracing::Reason::NotTraceable}),
             callMutateRequestHeaders(headers, Protocol::Http2));
   EXPECT_EQ(headers.EnvoyExternalAddress(), nullptr);
+}
+
+// Verify we preserve hop by hop headers if configured to do so.
+TEST_F(ConnectionManagerUtilityTest, PreserveHopByHop) {
+  TestRequestHeaderMapImpl request_headers;
+  TestResponseHeaderMapImpl response_headers{{"connection", "foo"},
+                                             {"transfer-encoding", "foo"},
+                                             {"upgrade", "eep"},
+                                             {"keep-alive", "ads"},
+                                             {"proxy-connection", "dsa"}};
+  ConnectionManagerUtility::mutateResponseHeaders(response_headers, &request_headers, config_, via_,
+                                                  false);
+  EXPECT_TRUE(response_headers.has(Headers::get().Connection));
+  EXPECT_TRUE(response_headers.has(Headers::get().TransferEncoding));
+  EXPECT_TRUE(response_headers.has(Headers::get().Upgrade));
+  EXPECT_TRUE(response_headers.has(Headers::get().KeepAlive));
+  EXPECT_TRUE(response_headers.has(Headers::get().ProxyConnection));
 }
 
 // Verify that we don't set the via header on requests/responses when empty.
@@ -1228,6 +1263,14 @@ TEST_F(ConnectionManagerUtilityTest, SamplingWithoutRouteOverride) {
   callMutateRequestHeaders(request_headers, Protocol::Http2);
 
   EXPECT_EQ(Tracing::Reason::Sampling, request_id_extension_->getTraceReason(request_headers));
+}
+
+TEST_F(ConnectionManagerUtilityTest, CheckSamplingDecisionWithBypassSamplingWithRequestId) {
+  EXPECT_CALL(*request_id_extension_, useRequestIdForTraceSampling()).WillOnce(Return(false));
+  Http::TestRequestHeaderMapImpl request_headers{
+      {"x-request-id", "125a4afb-6f55-44ba-ad80-413f09f48a28"}};
+  const auto ret = callMutateRequestHeaders(request_headers, Protocol::Http2);
+  EXPECT_EQ(Tracing::Reason::Sampling, ret.trace_reason_);
 }
 
 TEST_F(ConnectionManagerUtilityTest, SamplingWithRouteOverride) {

@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "envoy/common/matchers.h"
 #include "envoy/common/regex.h"
 #include "envoy/config/core/v3/protocol.pb.h"
 #include "envoy/config/route/v3/route_components.pb.h"
@@ -9,8 +10,8 @@
 #include "envoy/http/protocol.h"
 #include "envoy/type/v3/range.pb.h"
 
-#include "common/http/status.h"
-#include "common/protobuf/protobuf.h"
+#include "source/common/http/status.h"
+#include "source/common/protobuf/protobuf.h"
 
 namespace Envoy {
 namespace Http {
@@ -20,7 +21,16 @@ namespace Http {
  */
 class HeaderUtility {
 public:
-  enum class HeaderMatchType { Value, Regex, Range, Present, Prefix, Suffix, Contains };
+  enum class HeaderMatchType {
+    Value,
+    Regex,
+    Range,
+    Present,
+    Prefix,
+    Suffix,
+    Contains,
+    StringMatch
+  };
 
   /**
    * Get all header values as a single string. Multiple headers are concatenated with ','.
@@ -65,6 +75,7 @@ public:
     std::string value_;
     Regex::CompiledMatcherPtr regex_;
     envoy::type::v3::Int64Range range_;
+    Matchers::StringMatcherPtr string_match_;
     const bool invert_match_;
     bool present_;
 

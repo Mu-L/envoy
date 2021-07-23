@@ -6,12 +6,12 @@
 #include "envoy/config/core/v3/protocol.pb.h"
 #include "envoy/config/core/v3/protocol.pb.validate.h"
 
-#include "common/common/fmt.h"
-#include "common/http/exception.h"
-#include "common/http/header_map_impl.h"
-#include "common/http/http1/settings.h"
-#include "common/http/utility.h"
-#include "common/network/address_impl.h"
+#include "source/common/common/fmt.h"
+#include "source/common/http/exception.h"
+#include "source/common/http/header_map_impl.h"
+#include "source/common/http/http1/settings.h"
+#include "source/common/http/utility.h"
+#include "source/common/network/address_impl.h"
 
 #include "test/mocks/http/mocks.h"
 #include "test/mocks/protobuf/mocks.h"
@@ -870,6 +870,8 @@ TEST(HttpUtility, ResetReasonToString) {
             Utility::resetReasonToString(Http::StreamResetReason::RemoteRefusedStreamReset));
   EXPECT_EQ("remote error with CONNECT request",
             Utility::resetReasonToString(Http::StreamResetReason::ConnectError));
+  EXPECT_EQ("overload manager reset",
+            Utility::resetReasonToString(Http::StreamResetReason::OverloadManager));
 }
 
 class TestConfig : public Router::RouteSpecificFilterConfig {
@@ -1231,7 +1233,7 @@ TEST(HttpUtility, TestRejectNominatedXForwardedHost) {
   EXPECT_EQ(sanitized_headers, request_headers);
 }
 
-TEST(HttpUtility, TestRejectNominatedXForwardedProto) {
+TEST(HttpUtility, TestRejectNominatedForwardedProto) {
   Http::TestRequestHeaderMapImpl request_headers = {
       {":method", "GET"},
       {":path", "/"},
@@ -1311,6 +1313,31 @@ TEST(HttpUtility, TestRejectTeHeaderTooLong) {
 
   EXPECT_FALSE(Utility::sanitizeConnectionHeader(request_headers));
   EXPECT_EQ(sanitized_headers, request_headers);
+}
+
+TEST(HttpUtility, TestRejectUriWithNoPath) {
+  Http::TestRequestHeaderMapImpl request_headers_no_path = {
+      {":method", "GET"}, {":authority", "example.com"}, {":scheme", "http"}};
+  EXPECT_EQ(Utility::buildOriginalUri(request_headers_no_path, {}), "");
+}
+
+TEST(HttpUtility, TestTruncateUri) {
+  Http::TestRequestHeaderMapImpl request_headers_truncated_path = {{":method", "GET"},
+                                                                   {":path", "/hello_world"},
+                                                                   {":authority", "example.com"},
+                                                                   {":scheme", "http"}};
+  EXPECT_EQ(Utility::buildOriginalUri(request_headers_truncated_path, 2), "http://example.com/h");
+}
+
+TEST(HttpUtility, TestUriUsesOriginalPath) {
+  Http::TestRequestHeaderMapImpl request_headers_truncated_path = {
+      {":method", "GET"},
+      {":path", "/hello_world"},
+      {":authority", "example.com"},
+      {":scheme", "http"},
+      {"x-envoy-original-path", "/goodbye_world"}};
+  EXPECT_EQ(Utility::buildOriginalUri(request_headers_truncated_path, {}),
+            "http://example.com/goodbye_world");
 }
 
 TEST(Url, ParsingFails) {

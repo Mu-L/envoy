@@ -2,13 +2,13 @@
 
 #include "envoy/config/core/v3/base.pb.h"
 
-#include "common/api/os_sys_calls_impl.h"
-#include "common/network/address_impl.h"
-#include "common/network/socket_option_factory.h"
-#include "common/network/socket_option_impl.h"
-#include "common/network/udp_listener_impl.h"
-#include "common/network/udp_packet_writer_handler_impl.h"
-#include "common/network/utility.h"
+#include "source/common/api/os_sys_calls_impl.h"
+#include "source/common/network/address_impl.h"
+#include "source/common/network/socket_option_factory.h"
+#include "source/common/network/socket_option_impl.h"
+#include "source/common/network/udp_listener_impl.h"
+#include "source/common/network/udp_packet_writer_handler_impl.h"
+#include "source/common/network/utility.h"
 
 #include "test/common/network/udp_listener_impl_test_base.h"
 #include "test/fuzz/fuzz_runner.h"
@@ -61,6 +61,8 @@ public:
     server_socket_ = createServerSocket(true, ip_version_);
     server_socket_->addOptions(Network::SocketOptionFactory::buildIpPacketInfoOptions());
     server_socket_->addOptions(Network::SocketOptionFactory::buildRxQueueOverFlowOptions());
+    EXPECT_TRUE(Network::Socket::applyOptions(server_socket_->options(), *server_socket_,
+                                              envoy::config::core::v3::SocketOption::STATE_BOUND));
 
     // Create packet writer
     udp_packet_writer_ = std::make_unique<Network::UdpDefaultWriter>(server_socket_->ioHandle());

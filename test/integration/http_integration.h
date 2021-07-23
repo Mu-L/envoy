@@ -4,9 +4,9 @@
 #include <memory>
 #include <string>
 
-#include "common/http/codec_client.h"
-#include "common/http/http3/quic_client_connection_factory.h"
-#include "common/network/filter_impl.h"
+#include "source/common/http/codec_client.h"
+#include "source/common/http/http3/quic_client_connection_factory.h"
+#include "source/common/network/filter_impl.h"
 
 #include "test/common/http/http2/http2_frame.h"
 #include "test/integration/integration.h"
@@ -268,8 +268,7 @@ protected:
   Http::CodecType downstream_protocol_{Http::CodecType::HTTP1};
   std::string access_log_name_;
   testing::NiceMock<Random::MockRandomGenerator> random_;
-
-  bool set_reuse_port_{false};
+  Quic::QuicStatNames quic_stat_names_;
   std::string san_to_match_{"spiffe://lyft.com/backend-team"};
 };
 

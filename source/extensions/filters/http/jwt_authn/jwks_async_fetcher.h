@@ -5,11 +5,10 @@
 #include "envoy/extensions/filters/http/jwt_authn/v3/config.pb.h"
 #include "envoy/server/factory_context.h"
 
-#include "common/common/logger.h"
-#include "common/init/target_impl.h"
-
-#include "extensions/filters/http/common/jwks_fetcher.h"
-#include "extensions/filters/http/jwt_authn/stats.h"
+#include "source/common/common/logger.h"
+#include "source/common/init/target_impl.h"
+#include "source/extensions/filters/http/common/jwks_fetcher.h"
+#include "source/extensions/filters/http/jwt_authn/stats.h"
 
 namespace Envoy {
 namespace Extensions {
@@ -19,7 +18,8 @@ namespace JwtAuthn {
 /**
  *  CreateJwksFetcherCb is a callback interface for creating a JwksFetcher instance.
  */
-using CreateJwksFetcherCb = std::function<Common::JwksFetcherPtr(Upstream::ClusterManager&)>;
+using CreateJwksFetcherCb = std::function<Common::JwksFetcherPtr(
+    Upstream::ClusterManager&, const envoy::extensions::filters::http::jwt_authn::v3::RemoteJwks&)>;
 /**
  *  JwksDoneFetched is a callback interface to set a Jwks when fetch is done.
  */

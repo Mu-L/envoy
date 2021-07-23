@@ -8,9 +8,9 @@
 #include "envoy/event/file_event.h"
 #include "envoy/network/dns.h"
 
-#include "common/common/linked_object.h"
-#include "common/common/logger.h"
-#include "common/common/utility.h"
+#include "source/common/common/linked_object.h"
+#include "source/common/common/logger.h"
+#include "source/common/common/utility.h"
 
 #include "absl/container/node_hash_map.h"
 #include "ares.h"
@@ -44,9 +44,10 @@ private:
         : parent_(parent), callback_(callback), dispatcher_(dispatcher), channel_(channel),
           dns_name_(dns_name) {}
 
-    void cancel() override {
+    void cancel(CancelReason) override {
       // c-ares only supports channel-wide cancellation, so we just allow the
       // network events to continue but don't invoke the callback on completion.
+      // TODO(mattklein123): Potentially use timeout to destroy and recreate the channel.
       cancelled_ = true;
     }
 

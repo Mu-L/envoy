@@ -1,13 +1,13 @@
-#include "common/tcp_proxy/upstream.h"
+#include "source/common/tcp_proxy/upstream.h"
 
 #include "envoy/upstream/cluster_manager.h"
 
-#include "common/http/codec_client.h"
-#include "common/http/codes.h"
-#include "common/http/header_map_impl.h"
-#include "common/http/headers.h"
-#include "common/http/utility.h"
-#include "common/runtime/runtime_features.h"
+#include "source/common/http/codec_client.h"
+#include "source/common/http/codes.h"
+#include "source/common/http/header_map_impl.h"
+#include "source/common/http/headers.h"
+#include "source/common/http/utility.h"
+#include "source/common/runtime/runtime_features.h"
 
 namespace Envoy {
 namespace TcpProxy {
@@ -172,7 +172,7 @@ void TcpConnPool::newStream(GenericConnectionPoolCallbacks& callbacks) {
   }
 }
 
-void TcpConnPool::onPoolFailure(ConnectionPool::PoolFailureReason reason,
+void TcpConnPool::onPoolFailure(ConnectionPool::PoolFailureReason reason, absl::string_view,
                                 Upstream::HostDescriptionConstSharedPtr host) {
   upstream_handle_ = nullptr;
   callbacks_->onGenericPoolFailure(reason, host);
@@ -231,19 +231,10 @@ void HttpConnPool::onPoolReady(Http::RequestEncoder& request_encoder,
                                Upstream::HostDescriptionConstSharedPtr host,
                                const StreamInfo::StreamInfo& info, absl::optional<Http::Protocol>) {
   upstream_handle_ = nullptr;
-  Http::RequestEncoder* latched_encoder = &request_encoder;
   upstream_->setRequestEncoder(request_encoder,
                                host->transportSocketFactory().implementsSecureTransport());
-
-  if (Runtime::runtimeFeatureEnabled(
-          "envoy.reloadable_features.http_upstream_wait_connect_response")) {
-    upstream_->setConnPoolCallbacks(
-        std::make_unique<HttpConnPool::Callbacks>(*this, host, info.downstreamSslConnection()));
-  } else {
-    callbacks_->onGenericPoolReady(nullptr, std::move(upstream_), host,
-                                   latched_encoder->getStream().connectionLocalAddress(),
-                                   info.downstreamSslConnection());
-  }
+  upstream_->setConnPoolCallbacks(
+      std::make_unique<HttpConnPool::Callbacks>(*this, host, info.downstreamSslConnection()));
 }
 
 void HttpConnPool::onGenericPoolReady(Upstream::HostDescriptionConstSharedPtr& host,

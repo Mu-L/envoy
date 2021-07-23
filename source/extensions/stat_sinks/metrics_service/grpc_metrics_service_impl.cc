@@ -1,4 +1,4 @@
-#include "extensions/stat_sinks/metrics_service/grpc_metrics_service_impl.h"
+#include "source/extensions/stat_sinks/metrics_service/grpc_metrics_service_impl.h"
 
 #include <chrono>
 
@@ -9,9 +9,9 @@
 #include "envoy/stats/stats.h"
 #include "envoy/upstream/cluster_manager.h"
 
-#include "common/common/assert.h"
-#include "common/common/utility.h"
-#include "common/config/utility.h"
+#include "source/common/common/assert.h"
+#include "source/common/common/utility.h"
+#include "source/common/config/utility.h"
 
 namespace Envoy {
 namespace Extensions {
@@ -19,10 +19,10 @@ namespace StatSinks {
 namespace MetricsService {
 
 GrpcMetricsStreamerImpl::GrpcMetricsStreamerImpl(
-    Grpc::AsyncClientFactoryPtr&& factory, const LocalInfo::LocalInfo& local_info,
+    Grpc::RawAsyncClientSharedPtr raw_async_client, const LocalInfo::LocalInfo& local_info,
     envoy::config::core::v3::ApiVersion transport_api_version)
     : GrpcMetricsStreamer<envoy::service::metrics::v3::StreamMetricsMessage,
-                          envoy::service::metrics::v3::StreamMetricsResponse>(*factory),
+                          envoy::service::metrics::v3::StreamMetricsResponse>(raw_async_client),
       local_info_(local_info),
       service_method_(
           Grpc::VersionedMethods("envoy.service.metrics.v3.MetricsService.StreamMetrics",

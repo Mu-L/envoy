@@ -1,7 +1,7 @@
 #include "envoy/http/alternate_protocols_cache.h"
 
-#include "common/http/alternate_protocols_cache_impl.h"
-#include "common/http/conn_pool_grid.h"
+#include "source/common/http/alternate_protocols_cache_impl.h"
+#include "source/common/http/conn_pool_grid.h"
 
 #include "test/common/http/common.h"
 #include "test/common/upstream/utility.h"
@@ -101,10 +101,12 @@ public:
   ConnectivityGridTestBase(bool use_alternate_protocols)
       : options_({Http::Protocol::Http11, Http::Protocol::Http2, Http::Protocol::Http3}),
         alternate_protocols_(maybeCreateAlternateProtocolsCacheImpl(use_alternate_protocols)),
+        quic_stat_names_(store_.symbolTable()),
         grid_(dispatcher_, random_,
               Upstream::makeTestHost(cluster_, "hostname", "tcp://127.0.0.1:9000", simTime()),
               Upstream::ResourcePriority::Default, socket_options_, transport_socket_options_,
-              state_, simTime(), alternate_protocols_, std::chrono::milliseconds(300), options_),
+              state_, simTime(), alternate_protocols_, std::chrono::milliseconds(300), options_,
+              quic_stat_names_, store_),
         host_(grid_.host()) {
     grid_.info_ = &info_;
     grid_.encoder_ = &encoder_;
@@ -127,13 +129,15 @@ public:
   }
 
   const Network::ConnectionSocket::OptionsSharedPtr socket_options_;
-  const Network::TransportSocketOptionsSharedPtr transport_socket_options_;
+  const Network::TransportSocketOptionsConstSharedPtr transport_socket_options_;
   ConnectivityGrid::ConnectivityOptions options_;
   Upstream::ClusterConnectivityState state_;
   NiceMock<Event::MockDispatcher> dispatcher_;
   std::shared_ptr<Upstream::MockClusterInfo> cluster_{new NiceMock<Upstream::MockClusterInfo>()};
   NiceMock<Random::MockRandomGenerator> random_;
   AlternateProtocolsCacheSharedPtr alternate_protocols_;
+  Stats::IsolatedStoreImpl store_;
+  Quic::QuicStatNames quic_stat_names_;
   ConnectivityGridForTest grid_;
   Upstream::HostDescriptionConstSharedPtr host_;
 
@@ -592,12 +596,14 @@ TEST_F(ConnectivityGridWithAlternateProtocolsCacheImplTest, SuccessWithoutHttp3N
   grid_.callbacks()->onPoolReady(encoder_, host_, info_, absl::nullopt);
 }
 
-#ifdef ENVOY_ENABLE_QUICHE
+#ifdef ENVOY_ENABLE_QUIC
 
 } // namespace
 } // namespace Http
 } // namespace Envoy
-#include "extensions/quic_listeners/quiche/quic_transport_socket_factory.h"
+
+#include "test/mocks/server/transport_socket_factory_context.h"
+#include "source/common/quic/quic_transport_socket_factory.h"
 namespace Envoy {
 namespace Http {
 namespace {
@@ -607,7 +613,9 @@ TEST_F(ConnectivityGridTest, RealGrid) {
   dispatcher_.allow_null_callback_ = true;
   // Set the cluster up to have a quic transport socket.
   Envoy::Ssl::ClientContextConfigPtr config(new NiceMock<Ssl::MockClientContextConfig>());
-  auto factory = std::make_unique<Quic::QuicClientTransportSocketFactory>(std::move(config));
+  NiceMock<Server::Configuration::MockTransportSocketFactoryContext> factory_context;
+  auto factory =
+      std::make_unique<Quic::QuicClientTransportSocketFactory>(std::move(config), factory_context);
   factory->initialize();
   ASSERT_FALSE(factory->usesProxyProtocolOptions());
   auto& matcher =
@@ -619,7 +627,8 @@ TEST_F(ConnectivityGridTest, RealGrid) {
   ConnectivityGrid grid(dispatcher_, random_,
                         Upstream::makeTestHost(cluster_, "tcp://127.0.0.1:9000", simTime()),
                         Upstream::ResourcePriority::Default, socket_options_,
-                        transport_socket_options_, state_, simTime(), options_);
+                        transport_socket_options_, state_, simTime(), alternate_protocols_,
+                        std::chrono::milliseconds(300), options_, quic_stat_names_, store_);
 
   // Create the HTTP/3 pool.
   auto optional_it1 = ConnectivityGridForTest::forceCreateNextPool(grid);

@@ -1,7 +1,7 @@
-#include "common/quic/client_connection_factory_impl.h"
+#include "source/common/quic/client_connection_factory_impl.h"
 
-#include "common/quic/envoy_quic_session_cache.h"
-#include "common/quic/quic_transport_socket_factory.h"
+#include "source/common/quic/envoy_quic_session_cache.h"
+#include "source/common/quic/quic_transport_socket_factory.h"
 
 namespace Envoy {
 namespace Quic {
@@ -43,19 +43,20 @@ std::shared_ptr<quic::QuicCryptoClientConfig> PersistentQuicInfoImpl::cryptoConf
 PersistentQuicInfoImpl::PersistentQuicInfoImpl(
     Event::Dispatcher& dispatcher, Network::TransportSocketFactory& transport_socket_factory,
     TimeSource& time_source, Network::Address::InstanceConstSharedPtr server_addr,
-    uint32_t buffer_limit)
+    const quic::QuicConfig& quic_config, uint32_t buffer_limit)
     : conn_helper_(dispatcher), alarm_factory_(dispatcher, *conn_helper_.GetClock()),
       server_id_{getConfig(transport_socket_factory).serverNameIndication(),
                  static_cast<uint16_t>(server_addr->ip()->port()), false},
       transport_socket_factory_(transport_socket_factory), time_source_(time_source),
-      buffer_limit_(buffer_limit) {
+      quic_config_(quic_config), buffer_limit_(buffer_limit) {
   quiche::FlagRegistry::getInstance();
 }
 
 std::unique_ptr<Network::ClientConnection>
 createQuicNetworkConnection(Http::PersistentQuicInfo& info, Event::Dispatcher& dispatcher,
                             Network::Address::InstanceConstSharedPtr server_addr,
-                            Network::Address::InstanceConstSharedPtr local_addr) {
+                            Network::Address::InstanceConstSharedPtr local_addr,
+                            QuicStatNames& quic_stat_names, Stats::Scope& scope) {
   // This flag fix a QUICHE issue which may crash Envoy during connection close.
   SetQuicReloadableFlag(quic_single_ack_in_packet2, true);
   PersistentQuicInfoImpl* info_impl = reinterpret_cast<PersistentQuicInfoImpl*>(&info);
@@ -74,7 +75,7 @@ createQuicNetworkConnection(Http::PersistentQuicInfo& info, Event::Dispatcher& d
   auto ret = std::make_unique<EnvoyQuicClientSession>(
       info_impl->quic_config_, info_impl->supported_versions_, std::move(connection),
       info_impl->server_id_, std::move(config), &info_impl->push_promise_index_, dispatcher,
-      info_impl->buffer_limit_);
+      info_impl->buffer_limit_, info_impl->crypto_stream_factory_, quic_stat_names, scope);
   return ret;
 }
 

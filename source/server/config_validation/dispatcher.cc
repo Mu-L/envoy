@@ -1,8 +1,7 @@
-#include "server/config_validation/dispatcher.h"
+#include "source/server/config_validation/dispatcher.h"
 
-#include "common/common/assert.h"
-
-#include "server/config_validation/connection.h"
+#include "source/common/common/assert.h"
+#include "source/server/config_validation/connection.h"
 
 namespace Envoy {
 namespace Event {
@@ -23,8 +22,7 @@ Network::DnsResolverSharedPtr ValidationDispatcher::createDnsResolver(
 }
 
 Network::ListenerPtr ValidationDispatcher::createListener(Network::SocketSharedPtr&&,
-                                                          Network::TcpListenerCallbacks&, bool,
-                                                          uint32_t) {
+                                                          Network::TcpListenerCallbacks&, bool) {
   NOT_IMPLEMENTED_GCOVR_EXCL_LINE;
 }
 

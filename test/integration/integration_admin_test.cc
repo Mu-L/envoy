@@ -9,11 +9,11 @@
 #include "envoy/config/route/v3/route.pb.h"
 #include "envoy/http/header_map.h"
 
-#include "common/common/fmt.h"
-#include "common/config/api_version.h"
-#include "common/profiler/profiler.h"
-#include "common/stats/histogram_impl.h"
-#include "common/stats/stats_matcher_impl.h"
+#include "source/common/common/fmt.h"
+#include "source/common/config/api_version.h"
+#include "source/common/profiler/profiler.h"
+#include "source/common/stats/histogram_impl.h"
+#include "source/common/stats/stats_matcher_impl.h"
 
 #include "test/common/stats/stat_test_utility.h"
 #include "test/integration/utility.h"
@@ -397,6 +397,17 @@ TEST_P(IntegrationAdminTest, Admin) {
   envoy::admin::v3::ConfigDump config_dump_with_eds;
   TestUtility::loadFromJson(response->body(), config_dump_with_eds);
   EXPECT_EQ(7, config_dump_with_eds.configs_size());
+
+  EXPECT_EQ("200", request("admin", "GET", "/config_dump?name_regex=route_config_0", response));
+  EXPECT_EQ("application/json", ContentType(response));
+  envoy::admin::v3::ConfigDump name_filtered_config_dump;
+  TestUtility::loadFromJson(response->body(), name_filtered_config_dump);
+  EXPECT_EQ(6, config_dump.configs_size());
+
+  // SecretsConfigDump should have been totally filtered away.
+  secret_config_dump.Clear();
+  name_filtered_config_dump.configs(5).UnpackTo(&secret_config_dump);
+  EXPECT_EQ(secret_config_dump.static_secrets().size(), 0);
 
   // Validate that the "inboundonly" does not stop the default listener.
   response = IntegrationUtil::makeSingleRequest(lookupPort("admin"), "POST",

@@ -26,15 +26,16 @@
 #include "envoy/thread_local/thread_local.h"
 #include "envoy/upstream/cluster_manager.h"
 
-#include "common/common/cleanup.h"
-#include "common/config/grpc_mux_impl.h"
-#include "common/config/subscription_factory_impl.h"
-#include "common/http/alternate_protocols_cache_impl.h"
-#include "common/http/alternate_protocols_cache_manager_impl.h"
-#include "common/http/async_client_impl.h"
-#include "common/upstream/load_stats_reporter.h"
-#include "common/upstream/priority_conn_pool_map.h"
-#include "common/upstream/upstream_impl.h"
+#include "source/common/common/cleanup.h"
+#include "source/common/config/grpc_mux_impl.h"
+#include "source/common/config/subscription_factory_impl.h"
+#include "source/common/http/alternate_protocols_cache_impl.h"
+#include "source/common/http/alternate_protocols_cache_manager_impl.h"
+#include "source/common/http/async_client_impl.h"
+#include "source/common/quic/quic_stat_names.h"
+#include "source/common/upstream/load_stats_reporter.h"
+#include "source/common/upstream/priority_conn_pool_map.h"
+#include "source/common/upstream/upstream_impl.h"
 
 namespace Envoy {
 namespace Upstream {
@@ -44,23 +45,21 @@ namespace Upstream {
  */
 class ProdClusterManagerFactory : public ClusterManagerFactory {
 public:
-  ProdClusterManagerFactory(Server::Admin& admin, Runtime::Loader& runtime, Stats::Store& stats,
-                            ThreadLocal::Instance& tls, Network::DnsResolverSharedPtr dns_resolver,
-                            Ssl::ContextManager& ssl_context_manager,
-                            Event::Dispatcher& main_thread_dispatcher,
-                            const LocalInfo::LocalInfo& local_info,
-                            Secret::SecretManager& secret_manager,
-                            ProtobufMessage::ValidationContext& validation_context, Api::Api& api,
-                            Http::Context& http_context, Grpc::Context& grpc_context,
-                            Router::Context& router_context,
-                            AccessLog::AccessLogManager& log_manager,
-                            Singleton::Manager& singleton_manager, const Server::Options& options)
+  ProdClusterManagerFactory(
+      Server::Admin& admin, Runtime::Loader& runtime, Stats::Store& stats,
+      ThreadLocal::Instance& tls, Network::DnsResolverSharedPtr dns_resolver,
+      Ssl::ContextManager& ssl_context_manager, Event::Dispatcher& main_thread_dispatcher,
+      const LocalInfo::LocalInfo& local_info, Secret::SecretManager& secret_manager,
+      ProtobufMessage::ValidationContext& validation_context, Api::Api& api,
+      Http::Context& http_context, Grpc::Context& grpc_context, Router::Context& router_context,
+      AccessLog::AccessLogManager& log_manager, Singleton::Manager& singleton_manager,
+      const Server::Options& options, Quic::QuicStatNames& quic_stat_names)
       : main_thread_dispatcher_(main_thread_dispatcher), validation_context_(validation_context),
         api_(api), http_context_(http_context), grpc_context_(grpc_context),
         router_context_(router_context), admin_(admin), runtime_(runtime), stats_(stats), tls_(tls),
         dns_resolver_(dns_resolver), ssl_context_manager_(ssl_context_manager),
         local_info_(local_info), secret_manager_(secret_manager), log_manager_(log_manager),
-        singleton_manager_(singleton_manager), options_(options),
+        singleton_manager_(singleton_manager), options_(options), quic_stat_names_(quic_stat_names),
         alternate_protocols_cache_manager_factory_(singleton_manager,
                                                    main_thread_dispatcher.timeSource(), tls_),
         alternate_protocols_cache_manager_(alternate_protocols_cache_manager_factory_.get()) {}
@@ -74,13 +73,13 @@ public:
                    const absl::optional<envoy::config::core::v3::AlternateProtocolsCacheOptions>&
                        alternate_protocol_options,
                    const Network::ConnectionSocket::OptionsSharedPtr& options,
-                   const Network::TransportSocketOptionsSharedPtr& transport_socket_options,
+                   const Network::TransportSocketOptionsConstSharedPtr& transport_socket_options,
                    TimeSource& time_source, ClusterConnectivityState& state) override;
   Tcp::ConnectionPool::InstancePtr
   allocateTcpConnPool(Event::Dispatcher& dispatcher, HostConstSharedPtr host,
                       ResourcePriority priority,
                       const Network::ConnectionSocket::OptionsSharedPtr& options,
-                      Network::TransportSocketOptionsSharedPtr transport_socket_options,
+                      Network::TransportSocketOptionsConstSharedPtr transport_socket_options,
                       ClusterConnectivityState& state) override;
   std::pair<ClusterSharedPtr, ThreadAwareLoadBalancerPtr>
   clusterFromProto(const envoy::config::cluster::v3::Cluster& cluster, ClusterManager& cm,
@@ -108,6 +107,7 @@ protected:
   AccessLog::AccessLogManager& log_manager_;
   Singleton::Manager& singleton_manager_;
   const Server::Options& options_;
+  Quic::QuicStatNames& quic_stat_names_;
   Http::AlternateProtocolsCacheManagerFactoryImpl alternate_protocols_cache_manager_factory_;
   Http::AlternateProtocolsCacheManagerSharedPtr alternate_protocols_cache_manager_;
 };
@@ -565,7 +565,7 @@ private:
   void applyUpdates(ClusterManagerCluster& cluster, uint32_t priority, PendingUpdates& updates);
   bool scheduleUpdate(ClusterManagerCluster& cluster, uint32_t priority, bool mergeable,
                       const uint64_t timeout);
-  ProtobufTypes::MessagePtr dumpClusterConfigs();
+  ProtobufTypes::MessagePtr dumpClusterConfigs(const Matchers::StringMatcher& name_matcher);
   static ClusterManagerStats generateStats(Stats::Scope& scope);
 
   /**

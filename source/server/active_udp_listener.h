@@ -8,9 +8,8 @@
 #include "envoy/network/listen_socket.h"
 #include "envoy/network/listener.h"
 
-#include "common/network/utility.h"
-
-#include "server/active_listener_base.h"
+#include "source/common/network/utility.h"
+#include "source/server/active_listener_base.h"
 
 namespace Envoy {
 namespace Server {
@@ -62,7 +61,8 @@ protected:
  */
 class ActiveRawUdpListener : public ActiveUdpListenerBase,
                              public Network::UdpListenerFilterManager,
-                             public Network::UdpReadFilterCallbacks {
+                             public Network::UdpReadFilterCallbacks,
+                             Logger::Loggable<Logger::Id::conn_handler> {
 public:
   ActiveRawUdpListener(uint32_t worker_index, uint32_t concurrency,
                        Network::UdpConnectionHandler& parent, Event::Dispatcher& dispatcher,

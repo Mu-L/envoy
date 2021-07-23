@@ -5,21 +5,21 @@
 #include <memory>
 #include <string>
 
-#include "common/buffer/buffer_impl.h"
-#include "common/config/utility.h"
-#include "common/http/header_map_impl.h"
-#include "common/http/http1/codec_impl.h"
-#include "common/http/http2/codec_impl.h"
-#include "common/network/address_impl.h"
-#include "common/network/listen_socket_impl.h"
-#include "common/network/socket_option_factory.h"
-#include "common/network/utility.h"
+#include "source/common/buffer/buffer_impl.h"
+#include "source/common/config/utility.h"
+#include "source/common/http/header_map_impl.h"
+#include "source/common/http/http1/codec_impl.h"
+#include "source/common/http/http2/codec_impl.h"
+#include "source/common/network/address_impl.h"
+#include "source/common/network/listen_socket_impl.h"
+#include "source/common/network/socket_option_factory.h"
+#include "source/common/network/utility.h"
 
 #ifdef ENVOY_ENABLE_QUIC
-#include "common/quic/codec_impl.h"
+#include "source/common/quic/codec_impl.h"
 #endif
 
-#include "server/connection_handler_impl.h"
+#include "source/server/connection_handler_impl.h"
 
 #include "test/test_common/network_utility.h"
 #include "test/test_common/utility.h"
@@ -508,7 +508,7 @@ FakeUpstream::FakeUpstream(Network::TransportSocketFactoryPtr&& transport_socket
     : http_type_(config.upstream_protocol_), http2_options_(config.http2_options_),
       http3_options_(config.http3_options_),
       socket_(Network::SocketSharedPtr(listen_socket.release())),
-      socket_factory_(std::make_shared<FakeListenSocketFactory>(socket_)),
+      socket_factory_(std::make_unique<FakeListenSocketFactory>(socket_)),
       api_(Api::createApiForTest(stats_store_)), time_system_(config.time_system_),
       dispatcher_(api_->allocateDispatcher("fake_upstream")),
       handler_(new Server::ConnectionHandlerImpl(*dispatcher_, 0)), config_(config),
@@ -571,6 +571,7 @@ void FakeUpstream::createUdpListenerFilterChain(Network::UdpListenerFilterManage
 }
 
 void FakeUpstream::threadRoutine() {
+  socket_factory_->doFinalPreWorkerInit();
   handler_->addListener(absl::nullopt, listener_);
   server_initialized_.setReady();
   dispatcher_->run(Event::Dispatcher::RunType::Block);
@@ -765,6 +766,16 @@ testing::AssertionResult FakeUpstream::rawWriteConnection(uint32_t index, const 
         connection.write(buffer, end_stream);
       },
       timeout);
+}
+
+void FakeUpstream::FakeListenSocketFactory::doFinalPreWorkerInit() {
+  if (socket_->socketType() == Network::Socket::Type::Stream) {
+    ASSERT_EQ(0, socket_->ioHandle().listen(ENVOY_TCP_BACKLOG_SIZE).rc_);
+  } else {
+    ASSERT(socket_->socketType() == Network::Socket::Type::Datagram);
+    ASSERT_TRUE(Network::Socket::applyOptions(socket_->options(), *socket_,
+                                              envoy::config::core::v3::SocketOption::STATE_BOUND));
+  }
 }
 
 FakeRawConnection::~FakeRawConnection() {

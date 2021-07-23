@@ -15,31 +15,32 @@
 #include "envoy/network/filter.h"
 #include "envoy/stats/scope.h"
 
-#include "common/buffer/buffer_impl.h"
-#include "common/buffer/zero_copy_input_stream_impl.h"
-#include "common/common/basic_resource_impl.h"
-#include "common/common/callback_impl.h"
-#include "common/common/linked_object.h"
-#include "common/common/lock_guard.h"
-#include "common/common/thread.h"
-#include "common/config/utility.h"
-#include "common/grpc/codec.h"
-#include "common/grpc/common.h"
-#include "common/http/http1/codec_impl.h"
-#include "common/http/http2/codec_impl.h"
-#include "common/http/http3/codec_stats.h"
-#include "common/network/connection_balancer_impl.h"
-#include "common/network/filter_impl.h"
-#include "common/network/listen_socket_impl.h"
-#include "common/network/udp_listener_impl.h"
-#include "common/network/udp_packet_writer_handler_impl.h"
-#include "common/stats/isolated_store_impl.h"
+#include "source/common/buffer/buffer_impl.h"
+#include "source/common/buffer/zero_copy_input_stream_impl.h"
+#include "source/common/common/basic_resource_impl.h"
+#include "source/common/common/callback_impl.h"
+#include "source/common/common/linked_object.h"
+#include "source/common/common/lock_guard.h"
+#include "source/common/common/thread.h"
+#include "source/common/config/utility.h"
+#include "source/common/grpc/codec.h"
+#include "source/common/grpc/common.h"
+#include "source/common/http/http1/codec_impl.h"
+#include "source/common/http/http2/codec_impl.h"
+#include "source/common/http/http3/codec_stats.h"
+#include "source/common/network/connection_balancer_impl.h"
+#include "source/common/network/filter_impl.h"
+#include "source/common/network/listen_socket_impl.h"
+#include "source/common/network/udp_listener_impl.h"
+#include "source/common/network/udp_packet_writer_handler_impl.h"
+#include "source/common/stats/isolated_store_impl.h"
 
 #if defined(ENVOY_ENABLE_QUIC)
-#include "common/quic/active_quic_listener.h"
+#include "source/common/quic/active_quic_listener.h"
+#include "source/common/quic/quic_stat_names.h"
 #endif
 
-#include "server/active_raw_udp_listener_config.h"
+#include "source/server/active_raw_udp_listener_config.h"
 
 #include "test/mocks/common.h"
 #include "test/test_common/test_time_system.h"
@@ -700,13 +701,13 @@ private:
 
     // Network::ListenSocketFactory
     Network::Socket::Type socketType() const override { return socket_->socketType(); }
-
     const Network::Address::InstanceConstSharedPtr& localAddress() const override {
       return socket_->addressProvider().localAddress();
     }
-
-    Network::SocketSharedPtr getListenSocket() override { return socket_; }
-    Network::SocketOptRef sharedSocket() const override { return *socket_; }
+    Network::SocketSharedPtr getListenSocket(uint32_t) override { return socket_; }
+    Network::ListenSocketFactoryPtr clone() const override { return nullptr; }
+    void closeAllSockets() override {}
+    void doFinalPreWorkerInit() override;
 
   private:
     Network::SocketSharedPtr socket_;
@@ -751,7 +752,7 @@ private:
       if (is_quic) {
 #if defined(ENVOY_ENABLE_QUIC)
         udp_listener_config_.listener_factory_ = std::make_unique<Quic::ActiveQuicListenerFactory>(
-            envoy::config::listener::v3::QuicProtocolOptions(), 1);
+            envoy::config::listener::v3::QuicProtocolOptions(), 1, parent_.quic_stat_names_);
 #else
         ASSERT(false, "Running a test that requires QUIC without compiling QUIC");
 #endif
@@ -813,7 +814,7 @@ private:
   const envoy::config::core::v3::Http2ProtocolOptions http2_options_;
   const envoy::config::core::v3::Http3ProtocolOptions http3_options_;
   Network::SocketSharedPtr socket_;
-  Network::ListenSocketFactorySharedPtr socket_factory_;
+  Network::ListenSocketFactoryPtr socket_factory_;
   ConditionalInitializer server_initialized_;
   // Guards any objects which can be altered both in the upstream thread and the
   // main test thread.
@@ -840,6 +841,9 @@ private:
   Http::Http1::CodecStats::AtomicPtr http1_codec_stats_;
   Http::Http2::CodecStats::AtomicPtr http2_codec_stats_;
   Http::Http3::CodecStats::AtomicPtr http3_codec_stats_;
+#ifdef ENVOY_ENABLE_QUIC
+  Quic::QuicStatNames quic_stat_names_ = Quic::QuicStatNames(stats_store_.symbolTable());
+#endif
 };
 
 using FakeUpstreamPtr = std::unique_ptr<FakeUpstream>;

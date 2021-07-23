@@ -3,16 +3,16 @@
 
 #include "envoy/extensions/filters/http/jwt_authn/v3/config.pb.h"
 
-#include "common/protobuf/utility.h"
-#include "common/stats/isolated_store_impl.h"
-
-#include "extensions/filters/http/jwt_authn/jwks_cache.h"
+#include "source/common/protobuf/utility.h"
+#include "source/common/stats/isolated_store_impl.h"
+#include "source/extensions/filters/http/jwt_authn/jwks_cache.h"
 
 #include "test/extensions/filters/http/jwt_authn/test_common.h"
 #include "test/mocks/server/factory_context.h"
 #include "test/test_common/utility.h"
 
 using envoy::extensions::filters::http::jwt_authn::v3::JwtAuthentication;
+using envoy::extensions::filters::http::jwt_authn::v3::RemoteJwks;
 using ::google::jwt_verify::Status;
 using ::testing::MockFunction;
 
@@ -32,7 +32,7 @@ protected:
 
   void SetUp() override {
     // fetcher is only called at async_fetch. In this test, it is never called.
-    EXPECT_CALL(mock_fetcher_, Call(_)).Times(0);
+    EXPECT_CALL(mock_fetcher_, Call(_, _)).Times(0);
     setupCache(ExampleConfig);
     jwks_ = google::jwt_verify::Jwks::createFrom(PublicKey, google::jwt_verify::Jwks::JWKS);
   }
@@ -45,7 +45,7 @@ protected:
   JwtAuthentication config_;
   JwksCachePtr cache_;
   google::jwt_verify::JwksPtr jwks_;
-  MockFunction<Common::JwksFetcherPtr(Upstream::ClusterManager&)> mock_fetcher_;
+  MockFunction<Common::JwksFetcherPtr(Upstream::ClusterManager&, const RemoteJwks&)> mock_fetcher_;
   NiceMock<Server::Configuration::MockFactoryContext> context_;
   JwtAuthnFilterStats stats_;
 };

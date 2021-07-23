@@ -6,11 +6,11 @@
 #include "envoy/config/route/v3/route_components.pb.h"
 #include "envoy/config/route/v3/route_components.pb.validate.h"
 
-#include "common/http/header_map_impl.h"
-#include "common/network/address_impl.h"
-#include "common/protobuf/utility.h"
-#include "common/router/config_impl.h"
-#include "common/router/router_ratelimit.h"
+#include "source/common/http/header_map_impl.h"
+#include "source/common/network/address_impl.h"
+#include "source/common/protobuf/utility.h"
+#include "source/common/router/config_impl.h"
+#include "source/common/router/router_ratelimit.h"
 
 #include "test/mocks/http/mocks.h"
 #include "test/mocks/ratelimit/mocks.h"
@@ -71,8 +71,11 @@ actions:
 
 static Http::TestRequestHeaderMapImpl genHeaders(const std::string& host, const std::string& path,
                                                  const std::string& method) {
-  return Http::TestRequestHeaderMapImpl{
-      {":authority", host}, {":path", path}, {":method", method}, {"x-forwarded-proto", "http"}};
+  return Http::TestRequestHeaderMapImpl{{":authority", host},
+                                        {":path", path},
+                                        {":method", method},
+                                        {"x-forwarded-proto", "http"},
+                                        {":scheme", "http"}};
 }
 
 class RateLimitConfiguration : public testing::Test {
@@ -827,7 +830,8 @@ actions:
     descriptor_value: fake_value
     headers:
     - name: x-header-name
-      exact_match: test_value
+      string_match:
+        exact: test_value
   )EOF";
 
   setupTest(yaml);
@@ -848,7 +852,8 @@ actions:
     descriptor_value: fake_value
     headers:
     - name: x-header-name
-      exact_match: test_value
+      string_match:
+        exact: test_value
   )EOF";
 
   setupTest(yaml);
@@ -868,7 +873,8 @@ actions:
     expect_match: false
     headers:
     - name: x-header-name
-      exact_match: test_value
+      string_match:
+        exact: test_value
   )EOF";
 
   setupTest(yaml);
@@ -890,7 +896,8 @@ actions:
     expect_match: false
     headers:
     - name: x-header-name
-      exact_match: test_value
+      string_match:
+        exact: test_value
   )EOF";
 
   setupTest(yaml);
@@ -932,7 +939,8 @@ actions:
     descriptor_value: fake_value
     headers:
     - name: x-header-name
-      exact_match: test_value
+      string_match:
+        exact: test_value
   )EOF";
 
   setupTest(yaml);

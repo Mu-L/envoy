@@ -1,19 +1,20 @@
-#include "extensions/access_loggers/wasm/config.h"
+#include "source/extensions/access_loggers/wasm/config.h"
 
 #include "envoy/extensions/access_loggers/wasm/v3/wasm.pb.validate.h"
 #include "envoy/registry/registry.h"
 #include "envoy/server/filter_config.h"
 
-#include "common/common/logger.h"
-#include "common/protobuf/protobuf.h"
-
-#include "extensions/access_loggers/wasm/wasm_access_log_impl.h"
-#include "extensions/common/wasm/wasm.h"
+#include "source/common/common/logger.h"
+#include "source/common/protobuf/protobuf.h"
+#include "source/extensions/access_loggers/wasm/wasm_access_log_impl.h"
+#include "source/extensions/common/wasm/wasm.h"
 
 namespace Envoy {
 namespace Extensions {
 namespace AccessLoggers {
 namespace Wasm {
+
+using Common::Wasm::PluginHandleSharedPtrThreadLocal;
 
 AccessLog::InstanceSharedPtr WasmAccessLogFactory::createAccessLogInstance(
     const Protobuf::Message& proto_config, AccessLog::FilterPtr&& filter,
@@ -31,9 +32,10 @@ AccessLog::InstanceSharedPtr WasmAccessLogFactory::createAccessLogInstance(
   auto callback = [access_log, &context, plugin](Common::Wasm::WasmHandleSharedPtr base_wasm) {
     // NB: the Slot set() call doesn't complete inline, so all arguments must outlive this call.
     auto tls_slot =
-        ThreadLocal::TypedSlot<Common::Wasm::PluginHandle>::makeUnique(context.threadLocal());
+        ThreadLocal::TypedSlot<PluginHandleSharedPtrThreadLocal>::makeUnique(context.threadLocal());
     tls_slot->set([base_wasm, plugin](Event::Dispatcher& dispatcher) {
-      return Common::Wasm::getOrCreateThreadLocalPlugin(base_wasm, plugin, dispatcher);
+      return std::make_shared<PluginHandleSharedPtrThreadLocal>(
+          Common::Wasm::getOrCreateThreadLocalPlugin(base_wasm, plugin, dispatcher));
     });
     access_log->setTlsSlot(std::move(tls_slot));
   };

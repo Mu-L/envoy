@@ -6,12 +6,16 @@
 #include "envoy/network/socket.h"
 #include "envoy/runtime/runtime.h"
 
-#include "common/protobuf/utility.h"
-#include "common/quic/envoy_quic_dispatcher.h"
-#include "common/runtime/runtime_protos.h"
+#include "source/common/protobuf/utility.h"
+#include "source/common/quic/envoy_quic_dispatcher.h"
+#include "source/common/quic/envoy_quic_proof_source_factory_interface.h"
+#include "source/common/runtime/runtime_protos.h"
+#include "source/server/active_udp_listener.h"
+#include "source/server/connection_handler_impl.h"
 
-#include "server/active_udp_listener.h"
-#include "server/connection_handler_impl.h"
+#if defined(__linux__)
+#include <linux/filter.h>
+#endif
 
 namespace Envoy {
 namespace Quic {
@@ -27,16 +31,22 @@ public:
   ActiveQuicListener(uint32_t worker_index, uint32_t concurrency, Event::Dispatcher& dispatcher,
                      Network::UdpConnectionHandler& parent,
                      Network::ListenerConfig& listener_config, const quic::QuicConfig& quic_config,
-                     Network::Socket::OptionsSharedPtr options, bool kernel_worker_routing,
+                     bool kernel_worker_routing,
                      const envoy::config::core::v3::RuntimeFeatureFlag& enabled,
-                     uint32_t packets_to_read_to_connection_count_ratio);
+                     QuicStatNames& quic_stat_names,
+                     uint32_t packets_to_read_to_connection_count_ratio,
+                     EnvoyQuicCryptoServerStreamFactoryInterface& crypto_server_stream_factory,
+                     EnvoyQuicProofSourceFactoryInterface& proof_source_factory);
 
   ActiveQuicListener(uint32_t worker_index, uint32_t concurrency, Event::Dispatcher& dispatcher,
                      Network::UdpConnectionHandler& parent, Network::SocketSharedPtr listen_socket,
                      Network::ListenerConfig& listener_config, const quic::QuicConfig& quic_config,
-                     Network::Socket::OptionsSharedPtr options, bool kernel_worker_routing,
+                     bool kernel_worker_routing,
                      const envoy::config::core::v3::RuntimeFeatureFlag& enabled,
-                     uint32_t packets_to_read_to_connection_count_ratio);
+                     QuicStatNames& quic_stat_names,
+                     uint32_t packets_to_read_to_connection_count_ratio,
+                     EnvoyQuicCryptoServerStreamFactoryInterface& crypto_server_stream_factory,
+                     EnvoyQuicProofSourceFactoryInterface& proof_source_factory);
 
   ~ActiveQuicListener() override;
 
@@ -76,8 +86,8 @@ private:
   // The number of runs of the event loop in which at least one CHLO was buffered.
   // TODO(ggreenway): Consider making this a published stat, or some variation of this information.
   uint64_t event_loops_with_buffered_chlo_for_test_{0};
-
   uint32_t packets_to_read_to_connection_count_ratio_;
+  EnvoyQuicCryptoServerStreamFactoryInterface& crypto_server_stream_factory_;
 };
 
 using ActiveQuicListenerPtr = std::unique_ptr<ActiveQuicListener>;
@@ -87,22 +97,34 @@ class ActiveQuicListenerFactory : public Network::ActiveUdpListenerFactory,
                                   Logger::Loggable<Logger::Id::quic> {
 public:
   ActiveQuicListenerFactory(const envoy::config::listener::v3::QuicProtocolOptions& config,
-                            uint32_t concurrency);
+                            uint32_t concurrency, QuicStatNames& quic_stat_names);
 
   // Network::ActiveUdpListenerFactory.
   Network::ConnectionHandler::ActiveUdpListenerPtr
   createActiveUdpListener(uint32_t worker_index, Network::UdpConnectionHandler& parent,
                           Event::Dispatcher& disptacher, Network::ListenerConfig& config) override;
   bool isTransportConnectionless() const override { return false; }
+  const Network::Socket::OptionsSharedPtr& socketOptions() const override { return options_; }
 
 private:
   friend class ActiveQuicListenerFactoryPeer;
 
+  absl::optional<std::reference_wrapper<EnvoyQuicCryptoServerStreamFactoryInterface>>
+      crypto_server_stream_factory_;
+  absl::optional<std::reference_wrapper<EnvoyQuicProofSourceFactoryInterface>>
+      proof_source_factory_;
   quic::QuicConfig quic_config_;
   const uint32_t concurrency_;
-  absl::once_flag install_bpf_once_;
   envoy::config::core::v3::RuntimeFeatureFlag enabled_;
+  QuicStatNames& quic_stat_names_;
   const uint32_t packets_to_read_to_connection_count_ratio_;
+  const Network::Socket::OptionsSharedPtr options_{std::make_shared<Network::Socket::Options>()};
+  bool kernel_worker_routing_{};
+
+#if defined(SO_ATTACH_REUSEPORT_CBPF) && defined(__linux__)
+  sock_fprog prog_;
+  std::vector<sock_filter> filter_;
+#endif
 };
 
 } // namespace Quic
