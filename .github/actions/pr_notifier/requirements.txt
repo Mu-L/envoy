@@ -4,8 +4,9 @@
 #
 #    pip-compile --generate-hashes tools/dependency/requirements.txt
 #
-slack_sdk==3.5.1 \
-     --hash=sha256:8ceb46f7989d2ba1694dec8555dbda7f750b9216e453da4ad3e32a498bc9ea9a
+slack_sdk==3.9.1 \
+     --hash=sha256:8c4b553d63ee18d72e67b80bec3257bab4feef17653374dbd877fa59f5b5aa2f \
+     --hash=sha256:a14e76cd237c501e1aca8cd510a11ed63a3ba8bfa323a3c655906dd099ad9afe
 aiohttp==3.5.3 \
     --hash=sha256:7967b760d0e96eb7ac6b20a9143112ce5c03a00b4f74d8a5ee66c8e88e6b6800
 async-timeout==3.0.1 \
