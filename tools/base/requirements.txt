@@ -181,7 +181,7 @@ coloredlogs==15.0.1 \
     # via
     #   -r requirements.in
     #   envoy.base.runner
-coverage==6.0 \
+coverage[toml]==6.0 \
     --hash=sha256:08fd55d2e00dac4c18a2fa26281076035ec86e764acdc198b9185ce749ada58f \
     --hash=sha256:11ce082eb0f7c2bbfe96f6c8bcc3a339daac57de4dc0f3186069ec5c58da911c \
     --hash=sha256:17983f6ccc47f4864fd16d20ff677782b23d1207bf222d10e4d676e4636b0872 \
@@ -331,9 +331,24 @@ flake8-polyfill==1.0.2 \
     --hash=sha256:12be6a34ee3ab795b19ca73505e7b55826d5f6ad7230d31b18e106400169b9e9 \
     --hash=sha256:e44b087597f6da52ec6393a709e7108b2905317d0c0b744cdca6208e670d8eda
     # via pep8-naming
-frozendict==2.0.6 \
-    --hash=sha256:3f00de72805cf4c9e81b334f3f04809278b967d2fed84552313a0fcce511beb1 \
-    --hash=sha256:5d3f75832c35d4df041f0e19c268964cbef29c1eb34cd3517cf883f1c2d089b9
+frozendict==2.2.1 \
+    --hash=sha256:0562b855a7a53e1f7048ff6ccd6b1cd66c39a10d603773c13381459875323d1f \
+    --hash=sha256:28b909fcf006347eba1a6c19c8bbd78326a7541fc6b116dc949492257584df36 \
+    --hash=sha256:3c7933574d68a1af458db5eeba13a715abd708578eeded86cd7aad9bd8e377c3 \
+    --hash=sha256:41e4f947f7189e367ab46eb1de0a7eeb53f247a4d5288d11b5461f9eefd1a2e3 \
+    --hash=sha256:4f506201b8a78061a46c0c146d460b2f8834688df0df3a2e40c75b526bf4271d \
+    --hash=sha256:6c3e57c2659d8a63dc0feae2e1480b3f5223ad8c6fee65222a007d050dd4a8c7 \
+    --hash=sha256:6db7ad25946137170b4bd49bfdfbd78ee9b3e33e97a038456118e3fcef1acd90 \
+    --hash=sha256:7778d85bd0a9b57f9b95dac35be11cacf69f0394a91e3e2a93efc819b1bdb21d \
+    --hash=sha256:959b0ffd85ac1c72cdb633be15d724df65f303c19a52c543570506251c10ac36 \
+    --hash=sha256:a932ec6c872b207733e16a0ff1eb508db961f2e4e9d35478fa93e5a3803e3d48 \
+    --hash=sha256:c378e22f24919385b8fc3f72b027606ed19b475f3d56b7641b78bab66dd47c88 \
+    --hash=sha256:cb3633db3ec58a1179766a18b9fee3987f2484e69fee2a13364127f46e5dfc31 \
+    --hash=sha256:d070acae7235b066682c4f293ea544cec1e36a41013492e8dacbde346d394c63 \
+    --hash=sha256:e09d0d4c95f68f302a66ee60784dfe55f74cef2d94158f2f5c42e2ca8ed08322 \
+    --hash=sha256:e762dfca8acf09d2977bb8c8849c7442ca0b3233da52e0af36f0fef08c4d808e \
+    --hash=sha256:f8dad4dbe19ddb4b7db56a8c1dbd4f39cad9e243bdbd5d96255274dc2a181070 \
+    --hash=sha256:f948577aa94a55647643448e425e21b9d9c70cff830056f4e5f9617889305205
     # via
     #   -r requirements.in
     #   envoy.base.runner
@@ -707,9 +722,11 @@ sphinxext-rediraffe==0.2.7 \
 toml==0.10.2 \
     --hash=sha256:806143ae5bfb6a3c6e736a764057db0e6a0e05e338b5630894a5f779cabb4f9b \
     --hash=sha256:b3bda1d108d5dd99f4a20d24d9c348e91c4db7ab1b749200bded2f839ccbe68f
-    # via
-    #   coverage
-    #   pytest
+    # via pytest
+tomli==2.0.0 \
+    --hash=sha256:b5bde28da1fed24b9bd1d4d2b8cba62300bfb4ec9a6187a957e8ddb9434c5224 \
+    --hash=sha256:c292c34f58502a1eb2bbb9f5bbc9a5ebc37bee10ffb8c2d6bbdfa8eb13cc14e1
+    # via coverage
 trycast==0.3.0 \
     --hash=sha256:1b7b4c0d4b0d674770a53f34a762e52a6cd6879eb251ab21625602699920080d \
     --hash=sha256:687185b812e8d1c45f2ba841e8de7bdcdee0695dcf3464f206800505d4c65f26
@@ -721,7 +738,6 @@ typing-extensions==3.10.0.2 \
     # via
     #   aiodocker
     #   aiohttp
-    #   gitpython
 uritemplate==3.0.1 \
     --hash=sha256:07620c3f3f8eed1f12600845892b0e036a2420acf513c53f7de0abd911a5894f \
     --hash=sha256:5af8ad10cec94f215e3f48112de2022e1d5a37ed427fbd88652fa908f2ab7cae
