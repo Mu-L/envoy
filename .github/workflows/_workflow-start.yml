@@ -44,7 +44,7 @@ jobs:
         mkdir -p ./sha
         echo $STATE_SHA > ./sha/state_sha
     - if: ${{ steps.env.outputs.trusted != 'true' }}
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: state_sha
         path: sha/

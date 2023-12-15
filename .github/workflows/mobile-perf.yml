@@ -39,7 +39,7 @@ jobs:
         ./bazelw build \
             --config=mobile-remote-release-clang \
             //test/performance:test_binary_size
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: sizecurrent
         path: mobile/bazel-bin/test/performance/test_binary_size
@@ -72,7 +72,7 @@ jobs:
         ./bazelw build \
             --config=mobile-remote-release-clang \
             //test/performance:test_binary_size
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: sizemain
         path: mobile/bazel-bin/test/performance/test_binary_size
